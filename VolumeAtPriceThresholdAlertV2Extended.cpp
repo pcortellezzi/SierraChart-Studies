@@ -22,12 +22,17 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 	SCInputRef Input_HighlightAdjacentAlertsGroupSize = sc.Input[9];
 	SCInputRef Input_DrawExtensionLinesUntilEndOfChart = sc.Input[10];
 	SCInputRef Input_NumberOfDaysToCalculate = sc.Input[11];
-	SCInputRef Input_Version = sc.Input[12];
+	SCInputRef Input_AllowExtendedConfig = sc.Input[12];
+	SCInputRef Input_BearishBullishBar = sc.Input[13];
+	SCInputRef Input_BarRefOffset = sc.Input[14];
+	SCInputRef Input_PriceOffset = sc.Input[15];
+	SCInputRef Input_AboveBellow = sc.Input[16];
+	SCInputRef Input_Version = sc.Input[17];
 
 	if (sc.SetDefaults)
 	{
 		// Set the configuration and defaults
-		sc.GraphName = "Volume At Price Threshold Alert V2";
+		sc.GraphName = "Volume At Price Threshold Alert V2 Extended";
 
 		sc.GraphRegion = 0;		
 		sc.AutoLoop = 0;//Manual looping
@@ -122,6 +127,24 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 		Input_NumberOfDaysToCalculate.Name = "Number of Days to Calculate";
 		Input_NumberOfDaysToCalculate.SetInt(30);
 		Input_NumberOfDaysToCalculate.SetIntLimits(1, 10000);
+
+		Input_AllowExtendedConfig.Name = "Enable Extended Configuration";
+		Input_AllowExtendedConfig.SetYesNo(0);
+
+		Input_BearishBullishBar.Name = "Bearish/Bullish Bar";
+		Input_BearishBullishBar.SetCustomInputStrings("Bearish;Bullish;Both");
+		Input_BearishBullishBar.SetCustomInputIndex(0);
+
+		Input_BarRefOffset.Name = "OHLC Base price";
+		Input_BarRefOffset.SetCustomInputStrings("None;Open;High;Low;Close");
+		Input_BarRefOffset.SetCustomInputIndex(0);
+
+		Input_PriceOffset.Name = "Price offset Bellow/Above";
+		Input_PriceOffset.SetInt(0);
+
+		Input_AboveBellow.Name = "Above/Bellow Price + Offset";
+		Input_AboveBellow.SetCustomInputStrings("Above;Bellow");
+		Input_AboveBellow.SetCustomInputIndex(0);
 
 		Input_Version.SetInt(2);
 
@@ -266,155 +289,181 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 			unsigned int VolumeThresholdValue = Input_VolumeThreshold.GetInt();
 			unsigned int AdditionalVolumeThresholdValue = Input_AdditionalVolumeThreshold.GetInt();
 
-			if (ComparisonMethodIndex == 0)//Bid Volume
+			int RefPrice = 0;
+			switch (Input_BarRefOffset.GetInt())
 			{
-				if ((VolumeThresholdValue > 0
-					&& p_VolumeAtPrice->BidVolume >= VolumeThresholdValue)
-					|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->BidVolume == 0)
-					)
-					ConditionMet = true;
-
+				case 1:
+					RefPrice = SC_OPEN;
+					break;
+				case 2:
+					RefPrice = SC_HIGH;
+					break;
+				case 3:
+					RefPrice = SC_LOW;
+					break;
+				case 4:
+					RefPrice = SC_LAST;
+					break;
 			}
-			else if (ComparisonMethodIndex == 1)//Ask Volume
-			{
-				if (( VolumeThresholdValue > 0
-					&& p_VolumeAtPrice->AskVolume >= VolumeThresholdValue)
-					|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->AskVolume == 0)
-					)
-					ConditionMet = true;
-			}
-			else if (ComparisonMethodIndex == 2)//Total Volume
-			{
-				if ((VolumeThresholdValue > 0
-					&& p_VolumeAtPrice->Volume >= VolumeThresholdValue)
-					|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->Volume == 0)
-					)
-					ConditionMet = true;
-			}
-			else if (ComparisonMethodIndex == 3)//Number of Trades
-			{
-				if ((VolumeThresholdValue > 0
-					&& p_VolumeAtPrice->NumberOfTrades >= VolumeThresholdValue)
-					|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->NumberOfTrades == 0)
-					)
-					ConditionMet = true;
-			}
-			else if (ComparisonMethodIndex == 4)//Ask Volume Bid Volume Difference
-			{
-				int AskVolumeBidVolumeDifference = p_VolumeAtPrice->AskVolume - p_VolumeAtPrice->BidVolume;
 
-				int VolumeThresholdSigned = Input_VolumeThreshold.GetInt();
-
-				if (AskVolumeBidVolumeDifference > 0 && VolumeThresholdSigned > 0 && AskVolumeBidVolumeDifference >= VolumeThresholdSigned)
-					ConditionMet = true;
-				else if (AskVolumeBidVolumeDifference < 0 && VolumeThresholdSigned < 0 && AskVolumeBidVolumeDifference <= VolumeThresholdSigned)
-					ConditionMet = true;
-
-			}
-			else if (ComparisonMethodIndex == 5)//Ask Volume Bid Volume Diagonal Difference
+			if (Input_AllowExtendedConfig.GetYesNo()
+			    && (Input_BearishBullishBar.GetIndex() == 2
+				    || sc.BaseDataIn[SC_CLOSE][BarIndex] > sc.BaseDataIn[SC_OPEN][BarIndex] && Input_BearishBullishBar.GetIndex() == 1
+			        || sc.BaseDataIn[SC_CLOSE][BarIndex] < sc.BaseDataIn[SC_OPEN][BarIndex] && Input_BearishBullishBar.GetIndex() == 0
+					|| sc.BaseDataIn[SC_CLOSE][BarIndex] == sc.BaseDataIn[SC_OPEN][BarIndex])
+				&& (RefPrice == 0 || (Input_AboveBellow.GetIndex() == 0 && Price >= sc.BaseDataIn[RefPrice][BarIndex] + Input_PriceOffset.GetInt() * sc.TickSize
+				                      || Input_AboveBellow.GetIndex() == 1 && Price <= sc.BaseDataIn[RefPrice][BarIndex] + Input_PriceOffset.GetInt() * sc.TickSize)))
 			{
-				int AskVolumeBidVolumeDifference = 0;
-
-				if (p_NextVolumeAtPrice != NULL)
+				if (ComparisonMethodIndex == 0)//Bid Volume
 				{
-					AskVolumeBidVolumeDifference = p_NextVolumeAtPrice->AskVolume - p_VolumeAtPrice->BidVolume;
-					if (p_NextVolumeAtPrice->AskVolume > p_VolumeAtPrice->BidVolume)
-						PriceForExtensionLine = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
-				}
-
-				int VolumeThresholdSigned = Input_VolumeThreshold.GetInt();
-
-				if (AskVolumeBidVolumeDifference > 0 && VolumeThresholdSigned > 0 && AskVolumeBidVolumeDifference >= VolumeThresholdSigned)
-					ConditionMet = true;
-				else if (AskVolumeBidVolumeDifference < 0 && VolumeThresholdSigned < 0 && AskVolumeBidVolumeDifference <= VolumeThresholdSigned)
-					ConditionMet = true;
-
-			}
-			else if (ComparisonMethodIndex == 6)//Ask Volume Bid Volume Ratio
-			{
-				bool AllowZeroValueComparesSetting = Input_AllowZeroValueCompares.GetYesNo();
-				unsigned int DivideByZeroActionIndex = Input_DivideByZeroAction.GetIndex();
-				int AskVolumeBidVolumeRatioPercent = 0;
-
-				if ((p_VolumeAtPrice->AskVolume > 0 && p_VolumeAtPrice->BidVolume > 0) || AllowZeroValueComparesSetting)
-				{
-					if (p_VolumeAtPrice->AskVolume >= p_VolumeAtPrice->BidVolume)
-					{
-						if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 0)
-							AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->AskVolume / 1) * 100;
-						else if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 1)
-							AskVolumeBidVolumeRatioPercent = 1000;
-						else
-							AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->AskVolume) / p_VolumeAtPrice->BidVolume) * 100);
-					}
-					else
-					{
-						if (p_VolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 0)
-							AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->BidVolume / 1) * -100;
-						else if (p_VolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 1)
-							AskVolumeBidVolumeRatioPercent = -1000;
-						else
-							AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->BidVolume) / p_VolumeAtPrice->AskVolume) * -100);
-					}
-				}
-
-				int PercentThresholdSigned = Input_PercentageThreshold.GetInt();
-
-				if (AskVolumeBidVolumeRatioPercent > 0 && PercentThresholdSigned > 0 && AskVolumeBidVolumeRatioPercent >= PercentThresholdSigned)
-					ConditionMet = true;
-				else if (AskVolumeBidVolumeRatioPercent < 0 && PercentThresholdSigned < 0 && AskVolumeBidVolumeRatioPercent <= PercentThresholdSigned)
-					ConditionMet = true;
-			}
-			else if (ComparisonMethodIndex == 7)//Ask Volume Bid Volume Diagonal Ratio
-			{
-				bool AllowZeroValueComparesSetting = Input_AllowZeroValueCompares.GetYesNo();
-				unsigned int DivideByZeroActionIndex = Input_DivideByZeroAction.GetIndex();
-				int AskVolumeBidVolumeRatioPercent = 0;
-
-				if (p_NextVolumeAtPrice != NULL)
-				{
-					if ((p_NextVolumeAtPrice->AskVolume >= p_VolumeAtPrice->BidVolume) && (p_VolumeAtPrice->BidVolume > 0 || AllowZeroValueComparesSetting))
-					{
-						if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 0)
-							AskVolumeBidVolumeRatioPercent = (p_NextVolumeAtPrice->AskVolume / 1) * 100;
-						else if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 1)
-							AskVolumeBidVolumeRatioPercent = 1000;
-						else
-							AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_NextVolumeAtPrice->AskVolume) / p_VolumeAtPrice->BidVolume) * 100);
-
-						Price = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
-						PriceForExtensionLine = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
-					}
-					else if (p_VolumeAtPrice->BidVolume > p_NextVolumeAtPrice->AskVolume && (p_NextVolumeAtPrice->AskVolume > 0 || AllowZeroValueComparesSetting))
-					{
-						if (p_NextVolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 0)
-							AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->BidVolume / 1) * -100;
-						else if (p_NextVolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 1)
-							AskVolumeBidVolumeRatioPercent = -1000;
-						else
-							AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->BidVolume) / p_NextVolumeAtPrice->AskVolume) * -100);
-					}
-				}
-
-				int PercentThresholdSigned = Input_PercentageThreshold.GetInt();
-
-				if (AskVolumeBidVolumeRatioPercent > 0 && PercentThresholdSigned > 0 && AskVolumeBidVolumeRatioPercent >= PercentThresholdSigned)
-					ConditionMet = true;
-				else if (AskVolumeBidVolumeRatioPercent < 0 && PercentThresholdSigned < 0 && AskVolumeBidVolumeRatioPercent <= PercentThresholdSigned)
-					ConditionMet = true;
-			}
-			else if (ComparisonMethodIndex == 8)//Bid Volume and Ask Volume Separately
-			{
-				if (
-					((VolumeThresholdValue > 0
+					if ((VolumeThresholdValue > 0
 						&& p_VolumeAtPrice->BidVolume >= VolumeThresholdValue)
-						|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->BidVolume == 0))
-					&&
-					((AdditionalVolumeThresholdValue > 0
-						&& p_VolumeAtPrice->AskVolume >= AdditionalVolumeThresholdValue)
-						|| (AdditionalVolumeThresholdValue == 0 && p_VolumeAtPrice->AskVolume == 0))
-					)
-					ConditionMet = true;
+						|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->BidVolume == 0)
+						)
+						ConditionMet = true;
+
+				}
+				else if (ComparisonMethodIndex == 1)//Ask Volume
+				{
+					if (( VolumeThresholdValue > 0
+						&& p_VolumeAtPrice->AskVolume >= VolumeThresholdValue)
+						|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->AskVolume == 0)
+						)
+						ConditionMet = true;
+				}
+				else if (ComparisonMethodIndex == 2)//Total Volume
+				{
+					if ((VolumeThresholdValue > 0
+						&& p_VolumeAtPrice->Volume >= VolumeThresholdValue)
+						|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->Volume == 0)
+						)
+						ConditionMet = true;
+				}
+				else if (ComparisonMethodIndex == 3)//Number of Trades
+				{
+					if ((VolumeThresholdValue > 0
+						&& p_VolumeAtPrice->NumberOfTrades >= VolumeThresholdValue)
+						|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->NumberOfTrades == 0)
+						)
+						ConditionMet = true;
+				}
+				else if (ComparisonMethodIndex == 4)//Ask Volume Bid Volume Difference
+				{
+					int AskVolumeBidVolumeDifference = p_VolumeAtPrice->AskVolume - p_VolumeAtPrice->BidVolume;
+
+					int VolumeThresholdSigned = Input_VolumeThreshold.GetInt();
+
+					if (AskVolumeBidVolumeDifference > 0 && VolumeThresholdSigned > 0 && AskVolumeBidVolumeDifference >= VolumeThresholdSigned)
+						ConditionMet = true;
+					else if (AskVolumeBidVolumeDifference < 0 && VolumeThresholdSigned < 0 && AskVolumeBidVolumeDifference <= VolumeThresholdSigned)
+						ConditionMet = true;
+
+				}
+				else if (ComparisonMethodIndex == 5)//Ask Volume Bid Volume Diagonal Difference
+				{
+					int AskVolumeBidVolumeDifference = 0;
+
+					if (p_NextVolumeAtPrice != NULL)
+					{
+						AskVolumeBidVolumeDifference = p_NextVolumeAtPrice->AskVolume - p_VolumeAtPrice->BidVolume;
+						if (p_NextVolumeAtPrice->AskVolume > p_VolumeAtPrice->BidVolume)
+							PriceForExtensionLine = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
+					}
+
+					int VolumeThresholdSigned = Input_VolumeThreshold.GetInt();
+
+					if (AskVolumeBidVolumeDifference > 0 && VolumeThresholdSigned > 0 && AskVolumeBidVolumeDifference >= VolumeThresholdSigned)
+						ConditionMet = true;
+					else if (AskVolumeBidVolumeDifference < 0 && VolumeThresholdSigned < 0 && AskVolumeBidVolumeDifference <= VolumeThresholdSigned)
+						ConditionMet = true;
+
+				}
+				else if (ComparisonMethodIndex == 6)//Ask Volume Bid Volume Ratio
+				{
+					bool AllowZeroValueComparesSetting = Input_AllowZeroValueCompares.GetYesNo();
+					unsigned int DivideByZeroActionIndex = Input_DivideByZeroAction.GetIndex();
+					int AskVolumeBidVolumeRatioPercent = 0;
+
+					if ((p_VolumeAtPrice->AskVolume > 0 && p_VolumeAtPrice->BidVolume > 0) || AllowZeroValueComparesSetting)
+					{
+						if (p_VolumeAtPrice->AskVolume >= p_VolumeAtPrice->BidVolume)
+						{
+							if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 0)
+								AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->AskVolume / 1) * 100;
+							else if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 1)
+								AskVolumeBidVolumeRatioPercent = 1000;
+							else
+								AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->AskVolume) / p_VolumeAtPrice->BidVolume) * 100);
+						}
+						else
+						{
+							if (p_VolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 0)
+								AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->BidVolume / 1) * -100;
+							else if (p_VolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 1)
+								AskVolumeBidVolumeRatioPercent = -1000;
+							else
+								AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->BidVolume) / p_VolumeAtPrice->AskVolume) * -100);
+						}
+					}
+
+					int PercentThresholdSigned = Input_PercentageThreshold.GetInt();
+
+					if (AskVolumeBidVolumeRatioPercent > 0 && PercentThresholdSigned > 0 && AskVolumeBidVolumeRatioPercent >= PercentThresholdSigned)
+						ConditionMet = true;
+					else if (AskVolumeBidVolumeRatioPercent < 0 && PercentThresholdSigned < 0 && AskVolumeBidVolumeRatioPercent <= PercentThresholdSigned)
+						ConditionMet = true;
+				}
+				else if (ComparisonMethodIndex == 7)//Ask Volume Bid Volume Diagonal Ratio
+				{
+					bool AllowZeroValueComparesSetting = Input_AllowZeroValueCompares.GetYesNo();
+					unsigned int DivideByZeroActionIndex = Input_DivideByZeroAction.GetIndex();
+					int AskVolumeBidVolumeRatioPercent = 0;
+
+					if (p_NextVolumeAtPrice != NULL)
+					{
+						if ((p_NextVolumeAtPrice->AskVolume >= p_VolumeAtPrice->BidVolume) && (p_VolumeAtPrice->BidVolume > 0 || AllowZeroValueComparesSetting))
+						{
+							if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 0)
+								AskVolumeBidVolumeRatioPercent = (p_NextVolumeAtPrice->AskVolume / 1) * 100;
+							else if (p_VolumeAtPrice->BidVolume == 0 && DivideByZeroActionIndex == 1)
+								AskVolumeBidVolumeRatioPercent = 1000;
+							else
+								AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_NextVolumeAtPrice->AskVolume) / p_VolumeAtPrice->BidVolume) * 100);
+
+							Price = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
+							PriceForExtensionLine = p_NextVolumeAtPrice->PriceInTicks * sc.TickSize;
+						}
+						else if (p_VolumeAtPrice->BidVolume > p_NextVolumeAtPrice->AskVolume && (p_NextVolumeAtPrice->AskVolume > 0 || AllowZeroValueComparesSetting))
+						{
+							if (p_NextVolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 0)
+								AskVolumeBidVolumeRatioPercent = (p_VolumeAtPrice->BidVolume / 1) * -100;
+							else if (p_NextVolumeAtPrice->AskVolume == 0 && DivideByZeroActionIndex == 1)
+								AskVolumeBidVolumeRatioPercent = -1000;
+							else
+								AskVolumeBidVolumeRatioPercent = sc.Round((static_cast<float>(p_VolumeAtPrice->BidVolume) / p_NextVolumeAtPrice->AskVolume) * -100);
+						}
+					}
+
+					int PercentThresholdSigned = Input_PercentageThreshold.GetInt();
+
+					if (AskVolumeBidVolumeRatioPercent > 0 && PercentThresholdSigned > 0 && AskVolumeBidVolumeRatioPercent >= PercentThresholdSigned)
+						ConditionMet = true;
+					else if (AskVolumeBidVolumeRatioPercent < 0 && PercentThresholdSigned < 0 && AskVolumeBidVolumeRatioPercent <= PercentThresholdSigned)
+						ConditionMet = true;
+				}
+				else if (ComparisonMethodIndex == 8)//Bid Volume and Ask Volume Separately
+				{
+					if (
+						((VolumeThresholdValue > 0
+							&& p_VolumeAtPrice->BidVolume >= VolumeThresholdValue)
+							|| (VolumeThresholdValue == 0 && p_VolumeAtPrice->BidVolume == 0))
+						&&
+						((AdditionalVolumeThresholdValue > 0
+							&& p_VolumeAtPrice->AskVolume >= AdditionalVolumeThresholdValue)
+							|| (AdditionalVolumeThresholdValue == 0 && p_VolumeAtPrice->AskVolume == 0))
+						)
+						ConditionMet = true;
+				}
 			}
 
 			if (ConditionMet)
