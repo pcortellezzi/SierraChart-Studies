@@ -27,7 +27,10 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 	SCInputRef Input_BarRefOffset = sc.Input[14];
 	SCInputRef Input_PriceOffset = sc.Input[15];
 	SCInputRef Input_AboveBellow = sc.Input[16];
-	SCInputRef Input_Version = sc.Input[17];
+	SCInputRef Input_BidVolumeFilter = sc.Input[17];
+	SCInputRef Input_AskVolumeFilter = sc.Input[18];
+	SCInputRef Input_TotalVolumeFilter = sc.Input[19];
+	SCInputRef Input_Version = sc.Input[20];
 
 	if (sc.SetDefaults)
 	{
@@ -145,6 +148,15 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 		Input_AboveBellow.Name = "Above/Bellow Price + Offset";
 		Input_AboveBellow.SetCustomInputStrings("Above;Bellow");
 		Input_AboveBellow.SetCustomInputIndex(0);
+
+		Input_BidVolumeFilter.Name = "Bid Volume Filter";
+		Input_BidVolumeFilter.SetInt(0);
+
+		Input_AskVolumeFilter.Name = "Ask Volume Filter";
+		Input_AskVolumeFilter.SetInt(0);
+
+		Input_TotalVolumeFilter.Name = "Total Volume Filter";
+		Input_TotalVolumeFilter.SetInt(0);
 
 		Input_Version.SetInt(2);
 
@@ -306,13 +318,20 @@ SCSFExport scsf_VolumeAtPriceThresholdAlertV2Extended(SCStudyInterfaceRef sc)
 					break;
 			}
 
+			unsigned int BidVolumeFilterValue = Input_BidVolumeFilter.GetInt();
+			unsigned int AskVolumeFilterValue = Input_AskVolumeFilter.GetInt();
+			unsigned int TotalVolumeFilterValue = Input_TotalVolumeFilter.GetInt();
+
 			if (Input_AllowExtendedConfig.GetYesNo()
 			    && (Input_BearishBullishBar.GetIndex() == 2
 				    || sc.BaseDataIn[SC_CLOSE][BarIndex] > sc.BaseDataIn[SC_OPEN][BarIndex] && Input_BearishBullishBar.GetIndex() == 1
 			        || sc.BaseDataIn[SC_CLOSE][BarIndex] < sc.BaseDataIn[SC_OPEN][BarIndex] && Input_BearishBullishBar.GetIndex() == 0
 					|| sc.BaseDataIn[SC_CLOSE][BarIndex] == sc.BaseDataIn[SC_OPEN][BarIndex])
 				&& (RefPrice == 0 || (Input_AboveBellow.GetIndex() == 0 && Price >= sc.BaseDataIn[RefPrice][BarIndex] + Input_PriceOffset.GetInt() * sc.TickSize
-				                      || Input_AboveBellow.GetIndex() == 1 && Price <= sc.BaseDataIn[RefPrice][BarIndex] + Input_PriceOffset.GetInt() * sc.TickSize)))
+				                      || Input_AboveBellow.GetIndex() == 1 && Price <= sc.BaseDataIn[RefPrice][BarIndex] + Input_PriceOffset.GetInt() * sc.TickSize))
+				&& (BidVolumeFilterValue == 0 || p_VolumeAtPrice->BidVolume >= BidVolumeFilterValue)
+				&& (AskVolumeFilterValue == 0 || p_VolumeAtPrice->AskVolume >= AskVolumeFilterValue)
+				&& (TotalVolumeFilterValue == 0 || p_VolumeAtPrice->Volume >= TotalVolumeFilterValue))
 			{
 				if (ComparisonMethodIndex == 0)//Bid Volume
 				{

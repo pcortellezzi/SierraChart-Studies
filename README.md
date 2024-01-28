@@ -13,6 +13,9 @@ Same study as the native one from SierraChart, but with complementary filters:
   * OHLC Base price : None (no price alerte comparaison)
   * Price offset Bellow/Above : in tick
   * Above/Bellow Price + Offset
+* Bid Volume Filter (0 = disabled)
+* Ask Volume Filter (0 = disabled)
+* Total Volume Filter (0 = disabled)
 
 ### use case
 #### mzpack absorption
@@ -51,6 +54,11 @@ Use twice, one for support and one for resistance
     <td>Price offset Bellow/Above = Depth</td>
   </tr>
   <tr>
+    <td>Filter</td>
+    <td>Bid Volume Filter = Filter</td>
+    <td>Ask Volume Filter = Filter</td>
+  </tr>
+ <tr>
     <td>S/R zones: enable</td>
     <td>Draw Extension Lines = All Prices in Adjacent Alerts<br>
         Draw Extension Lines With Transparent Range = Yes</td>
@@ -61,5 +69,10 @@ Use twice, one for support and one for resistance
     <td>S/R zones: consecutive levels</td>
     <td>Highlight Adjacent Alerts Minimum Group Size = S/R zones: consecutive levels</td>
     <td>Highlight Adjacent Alerts Minimum Group Size = S/R zones: consecutive levels</td>
+  </tr>
+   <tr>
+    <td>S/R zones: volume filter</td>
+    <td>Total Volume Filter = S/R zones: volume filter</td>
+    <td>Total Volume Filter = S/R zones: volume filter</td>
   </tr>
 </table>
